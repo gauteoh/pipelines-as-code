@@ -39,6 +39,24 @@ func TestResolveUntrustedAPIEndpoint(t *testing.T) {
 			},
 		},
 		{
+			name:    "enterprise cloud repository host",
+			rawHost: "enterprise.ghe.com",
+			want: APIEndpoint{
+				APIURL:         "https://api.enterprise.ghe.com",
+				BaseURL:        "https://api.enterprise.ghe.com",
+				RepositoryHost: "enterprise.ghe.com",
+			},
+		},
+		{
+			name:    "enterprise cloud API host",
+			rawHost: "api.enterprise.ghe.com",
+			want: APIEndpoint{
+				APIURL:         "https://api.enterprise.ghe.com",
+				BaseURL:        "https://api.enterprise.ghe.com",
+				RepositoryHost: "enterprise.ghe.com",
+			},
+		},
+		{
 			name:    "enterprise host",
 			rawHost: "github.example.com",
 			want: APIEndpoint{
@@ -208,6 +226,16 @@ func TestTrustedAPIEndpointForRepository(t *testing.T) {
 				APIURL:         "https://github.example.com/api/v3",
 				BaseURL:        "https://github.example.com",
 				RepositoryHost: "github.example.com",
+			},
+		},
+		{
+			name:          "trusted enterprise cloud repository",
+			allowlist:     "enterprise.ghe.com",
+			repositoryURL: "https://enterprise.ghe.com/owner/repo",
+			want: APIEndpoint{
+				APIURL:         "https://api.enterprise.ghe.com",
+				BaseURL:        "https://api.enterprise.ghe.com",
+				RepositoryHost: "enterprise.ghe.com",
 			},
 		},
 		{

@@ -1362,7 +1362,7 @@ func TestVerifyRepoAndUser(t *testing.T) {
 	observerCore, _ := zapobserver.New(zap.InfoLevel)
 	logger := zap.New(observerCore).Sugar()
 
-	payload := []byte(`{"key": "value"}`)
+	payload := []byte(`{"repository":{"html_url":"https://github.com/owner/repo"}}`)
 	mac := hmac.New(sha256.New, []byte("secret"))
 	mac.Write(payload)
 	sha256secret := hex.EncodeToString(mac.Sum(nil))
@@ -1602,7 +1602,12 @@ func TestVerifyRepoAndUser(t *testing.T) {
 
 			k8int := &kitesthelper.KinterfaceTest{GetSecretResult: map[string]string{"pipelines-as-code-secret": tt.webhookSecret, "secret": "token", "webhook-secret": "secret"}}
 
-			stdata, _ := testclient.SeedTestData(t, ctx, testclient.Data{Repositories: tt.repositories /*Secret: []*corev1.Secret{secret}*/})
+			stdata, _ := testclient.SeedTestData(t, ctx, testclient.Data{
+				Repositories: tt.repositories,
+				ConfigMap: []*corev1.ConfigMap{{
+					ObjectMeta: metav1.ObjectMeta{Name: "pipelines-as-code", Namespace: "pac"},
+				}},
+			})
 			in := info.NewInfo()
 			cs := &params.Run{
 				Info: in,
@@ -1620,7 +1625,7 @@ func TestVerifyRepoAndUser(t *testing.T) {
 
 			p := NewPacs(&ev, vcx, cs, pacInfo, k8int, logger, nil)
 			repo, err := p.verifyRepoAndUser(ctx)
-			assert.Assert(t, (err != nil) == tt.wantErr)
+			assert.Assert(t, (err != nil) == tt.wantErr, "unexpected error: %v", err)
 
 			if tt.wantErr {
 				assert.ErrorContains(t, err, tt.wantErrMsg)

@@ -1291,12 +1291,16 @@ func TestGithubSetClient(t *testing.T) {
 
 func TestMakeClientEnterpriseURLs(t *testing.T) {
 	tests := []struct {
-		name   string
-		apiURL string
+		name       string
+		apiURL     string
+		wantAPI    string
+		wantUpload string
 	}{
 		{name: "enterprise base URL", apiURL: "https://ghe.example.com"},
 		{name: "enterprise API URL", apiURL: "https://ghe.example.com/api/v3"},
 		{name: "enterprise API URL with trailing slash", apiURL: "https://ghe.example.com/api/v3/"},
+		{name: "cloud API URL", apiURL: "https://api.enterprise.ghe.com", wantAPI: "https://api.enterprise.ghe.com/", wantUpload: "https://uploads.enterprise.ghe.com/"},
+		{name: "cloud API URL with trailing slash", apiURL: "https://api.enterprise.ghe.com/", wantAPI: "https://api.enterprise.ghe.com/", wantUpload: "https://uploads.enterprise.ghe.com/"},
 	}
 
 	for _, tt := range tests {
@@ -1304,8 +1308,12 @@ func TestMakeClientEnterpriseURLs(t *testing.T) {
 			client, providerName, _, err := MakeClient(t.Context(), tt.apiURL, "token")
 			assert.NilError(t, err)
 			assert.Equal(t, providerName, "github-enterprise")
-			assert.Equal(t, client.BaseURL(), "https://ghe.example.com/api/v3/")
-			assert.Equal(t, client.UploadURL(), "https://ghe.example.com/api/uploads/")
+			if tt.wantAPI == "" {
+				tt.wantAPI = "https://ghe.example.com/api/v3/"
+				tt.wantUpload = "https://ghe.example.com/api/uploads/"
+			}
+			assert.Equal(t, client.BaseURL(), tt.wantAPI)
+			assert.Equal(t, client.UploadURL(), tt.wantUpload)
 		})
 	}
 }
@@ -1364,9 +1372,8 @@ func TestGithubSetClientPreauthenticatedClient(t *testing.T) {
 
 func TestGithubSetClientUsesSignedEnterpriseEndpoint(t *testing.T) {
 	const webhookSecret = "webhook-secret"
-	payload := []byte(`{"repository":{"html_url":"https://ghe.example.com/owner/repo"}}`)
-
 	tests := []struct {
+		repositoryHost string
 		name           string
 		allowlist      string
 		enterpriseHost string
@@ -1374,6 +1381,29 @@ func TestGithubSetClientUsesSignedEnterpriseEndpoint(t *testing.T) {
 		signingSecret  string
 		wantErrSub     string
 	}{
+		{
+			name:           "cloud host without enterprise header",
+			repositoryHost: "enterprise.ghe.com",
+			allowlist:      "enterprise.ghe.com",
+			webhookSecret:  webhookSecret,
+			signingSecret:  webhookSecret,
+		},
+		{
+			name:           "untrusted cloud host without enterprise header",
+			repositoryHost: "enterprise.ghe.com",
+			allowlist:      "other.ghe.com",
+			webhookSecret:  webhookSecret,
+			signingSecret:  webhookSecret,
+			wantErrSub:     "refusing to use credentials",
+		},
+		{
+			name:           "cloud host with mismatched header",
+			repositoryHost: "enterprise.ghe.com",
+			enterpriseHost: "other.ghe.com",
+			webhookSecret:  webhookSecret,
+			signingSecret:  webhookSecret,
+			wantErrSub:     "does not match signed repository host",
+		},
 		{
 			name:           "matching signed enterprise host",
 			allowlist:      "ghe.example.com",
@@ -1422,6 +1452,10 @@ func TestGithubSetClientUsesSignedEnterpriseEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.repositoryHost == "" {
+				tt.repositoryHost = "ghe.example.com"
+			}
+			payload := fmt.Appendf(nil, `{"repository":{"html_url":"https://%s/owner/repo"}}`, tt.repositoryHost)
 			event := info.NewEvent()
 			event.EventType = "pull_request"
 			event.Provider.Token = "pat"
@@ -1453,9 +1487,11 @@ func TestGithubSetClientUsesSignedEnterpriseEndpoint(t *testing.T) {
 				return
 			}
 			assert.NilError(t, err)
-			assert.Equal(t, "https://ghe.example.com", event.Provider.URL)
-			assert.Equal(t, "https://ghe.example.com", event.GHEURL)
-			assert.Equal(t, "https://ghe.example.com/api/v3/", provider.Client().BaseURL())
+			endpoint, err := resolveUntrustedAPIEndpoint(tt.repositoryHost)
+			assert.NilError(t, err)
+			assert.Equal(t, endpoint.BaseURL, event.Provider.URL)
+			assert.Equal(t, endpoint.BaseURL, event.GHEURL)
+			assert.Equal(t, endpoint.APIURL+"/", provider.Client().BaseURL())
 		})
 	}
 }
