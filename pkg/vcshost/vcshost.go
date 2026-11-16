@@ -63,8 +63,8 @@ func IsPublic(host string) bool {
 	return ok
 }
 
-// Canonical returns the canonical hostname for a public SaaS instance, so that
-// api.github.com and github.com are treated as the same instance.
+// Canonical folds API aliases onto their repository hostname, including public
+// SaaS instances and GitHub Enterprise Cloud data-residency instances.
 //
 // Callers must build every URL from this value and never from the hostname they
 // were given: this normalisation is what makes a lookalike hostname collapse
@@ -73,7 +73,11 @@ func Canonical(host string) string {
 	if canonical, ok := publicHosts[strings.ToLower(host)]; ok {
 		return canonical
 	}
-	return strings.ToLower(host)
+	host = strings.ToLower(host)
+	if enterprise, ok := strings.CutSuffix(strings.TrimPrefix(host, "api."), ".ghe.com"); ok && enterprise != "" && !strings.Contains(enterprise, ".") {
+		return enterprise + ".ghe.com"
+	}
+	return host
 }
 
 // privateSuffixes are the DNS suffixes reserved for names that only resolve

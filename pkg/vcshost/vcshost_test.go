@@ -172,6 +172,10 @@ func TestCanonical(t *testing.T) {
 	}{
 		{name: "api.github.com folds into github.com", host: "api.github.com", want: "github.com"},
 		{name: "github.com is unchanged", host: "github.com", want: "github.com"},
+		{name: "cloud API host folds into repository host", host: "api.enterprise.ghe.com", want: "enterprise.ghe.com"},
+		{name: "cloud repository host is unchanged", host: "enterprise.ghe.com", want: "enterprise.ghe.com"},
+		{name: "cloud lookalike is unchanged", host: "api.enterprise.ghe.com.example.com", want: "api.enterprise.ghe.com.example.com"},
+		{name: "nested cloud lookalike is unchanged", host: "api.extra.enterprise.ghe.com", want: "api.extra.enterprise.ghe.com"},
 		{name: "self hosted is lowercased", host: "GitHub.Example.COM", want: "github.example.com"},
 	}
 	for _, tt := range tests {

@@ -292,8 +292,7 @@ func MakeClient(ctx context.Context, apiURL, token string, retryOpts ...*retryht
 	// client for the public instance and append /api/v3 to api.github.com.
 	if apiURL != "" && strings.TrimSuffix(apiURL, "/") != strings.TrimSuffix(apiPublicURL, "/") {
 		providerName = "github-enterprise"
-		uploadBaseURL := strings.TrimSuffix(strings.TrimSuffix(apiURL, "/"), "/api/v3")
-		uploadURL := uploadBaseURL + "/api/uploads"
+		uploadURL := uploadURLForAPI(apiURL)
 		client, err = github.NewClient(github.WithHTTPClient(tc), github.WithEnterpriseURLs(apiURL, uploadURL))
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("failed to configure GitHub Enterprise client: %w", err)
@@ -376,7 +375,7 @@ func (v *Provider) checkWebhookSecretValidity(ctx context.Context, cw clockwork.
 
 func (v *Provider) SetClient(ctx context.Context, run *params.Run, event *info.Event, repo *v1alpha1.Repository, eventsEmitter *events.EventEmitter) error {
 	if event.InstallationID <= 0 && event.EventType != "incoming" && event.Request != nil &&
-		event.Request.Header.Get("X-GitHub-Enterprise-Host") != "" {
+		(event.Request.Header.Get("X-GitHub-Enterprise-Host") != "" || len(event.Request.Payload) > 0) {
 		if err := v.Validate(ctx, run, event); err != nil {
 			return err
 		}

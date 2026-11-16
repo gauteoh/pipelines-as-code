@@ -112,7 +112,7 @@ func (v *Provider) GetAppToken(ctx context.Context, kube kubernetes.Interface, g
 		if !strings.HasPrefix(gheURL, "https://") && !strings.HasPrefix(gheURL, "http://") {
 			gheURL = "https://" + gheURL
 		}
-		uploadURL := gheURL + "/api/uploads"
+		uploadURL := uploadURLForAPI(gheURL)
 		v.ghClient, err = github.NewClient(github.WithTransport(apiTransport), github.WithEnterpriseURLs(gheURL, uploadURL))
 		if err != nil {
 			return "", fmt.Errorf("failed to create github enterprise client for %s: %w", gheURL, err)

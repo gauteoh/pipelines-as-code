@@ -74,16 +74,19 @@ func resolveUntrustedAPIEndpoint(rawHost string) (APIEndpoint, error) {
 
 // apiEndpointFor builds the endpoint of an already validated hostname.
 //
-// The public instance answers on its own API host and has no base URL, while a
-// self hosted one serves the API under /api/v3 of the host itself, so the two
-// shapes differ and every caller has to produce the same pair. scheme is only
-// honoured for a self hosted instance: github.com is always https.
+// Public and data-resident Cloud APIs use dedicated hosts; Server uses /api/v3.
+// Only self-hosted instances honour scheme; Cloud endpoints always use HTTPS.
 func apiEndpointFor(scheme, host string) APIEndpoint {
-	if vcshost.Canonical(host) == vcshost.PublicGitHub {
+	host = vcshost.Canonical(host)
+	if host == vcshost.PublicGitHub {
 		return APIEndpoint{
 			APIURL:         keys.PublicGithubAPIURL,
 			RepositoryHost: vcshost.PublicGitHub,
 		}
+	}
+	if enterprise, ok := strings.CutSuffix(host, ".ghe.com"); ok && enterprise != "" && !strings.Contains(enterprise, ".") {
+		apiURL := "https://api." + host
+		return APIEndpoint{APIURL: apiURL, BaseURL: apiURL, RepositoryHost: host}
 	}
 	baseURL := strings.ToLower(scheme) + "://" + host
 	return APIEndpoint{
@@ -91,6 +94,17 @@ func apiEndpointFor(scheme, host string) APIEndpoint {
 		BaseURL:        baseURL,
 		RepositoryHost: host,
 	}
+}
+
+func uploadURLForAPI(apiURL string) string {
+	parsed, err := url.Parse(apiURL)
+	if err == nil && strings.HasPrefix(parsed.Host, "api.") {
+		host := vcshost.Canonical(parsed.Host)
+		if endpoint := apiEndpointFor("https", host); parsed.Host == "api."+host && endpoint.APIURL == strings.TrimSuffix(apiURL, "/") {
+			return "https://uploads." + host
+		}
+	}
+	return strings.TrimSuffix(strings.TrimSuffix(apiURL, "/"), "/api/v3") + "/api/uploads"
 }
 
 // trustedAPIEndpointForHost resolves rawHost through the controller allowlist.

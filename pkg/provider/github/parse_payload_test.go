@@ -2190,6 +2190,12 @@ func TestAppTokenGeneration(t *testing.T) {
 	ghePayloadEvent.Repo = &gheRepository
 	ghePayload, err := json.Marshal(ghePayloadEvent)
 	assert.NilError(t, err)
+	cloudRepository := gheRepository
+	cloudRepository.HTMLURL = new("https://enterprise.ghe.com/owner/repo")
+	cloudPayloadEvent := ghePayloadEvent
+	cloudPayloadEvent.Repo = &cloudRepository
+	cloudPayload, err := json.Marshal(cloudPayloadEvent)
+	assert.NilError(t, err)
 
 	tests := []struct {
 		ctx             context.Context
@@ -2293,6 +2299,35 @@ func TestAppTokenGeneration(t *testing.T) {
 			wantTokenCalls:  1,
 			wantProviderURL: "https://github.example.com",
 			wantGHEURL:      "https://github.example.com",
+		},
+		{
+			ctx:             ctxGHE,
+			name:            "cloud payload without enterprise header configures event endpoints",
+			ctxNS:           testNamespace,
+			seedData:        gheSecret,
+			payload:         string(cloudPayload),
+			wantTokenCalls:  1,
+			wantProviderURL: "https://api.enterprise.ghe.com",
+			wantGHEURL:      "https://api.enterprise.ghe.com",
+		},
+		{
+			ctx:            ctxPinnedHost,
+			name:           "cloud payload without enterprise header outside allowlist is rejected",
+			ctxNS:          testNamespace,
+			seedData:       pinnedHost,
+			payload:        string(cloudPayload),
+			wantErrSubst:   "is not listed in",
+			wantLogMessage: githubAppTokenExfiltrationBlockedLog,
+		},
+		{
+			ctx:            ctxGHE,
+			name:           "unsigned cloud payload cannot mint tokens",
+			ctxNS:          testNamespace,
+			seedData:       gheSecret,
+			payload:        string(cloudPayload),
+			omitSignature:  true,
+			wantErrSubst:   "no signature has been detected",
+			wantLogMessage: githubAppTokenMintBlockedLog,
 		},
 		{
 			ctx:          ctxInvalidAppID,
